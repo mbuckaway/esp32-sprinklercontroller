@@ -38,6 +38,42 @@ enum ContactState {
     CONTACT_NOT_DETECTED = 1
 };
 
-char *garagedoor_current_state_string(uint8_t state);
-char *garagedoor_target_state_string(uint8_t state);
-char *contact_state_string(uint8_t state);
+/**
+ * In Use.
+ *
+ * This characteristic describes if the service is in use. The service must be "Active" before the value of this
+ * characteristic can be set to in use.  A valve is set to "In Use" when there are
+ * fluid flowing through the valve.
+ *
+ * This characteristic requires iOS 11.2 or later.
+ */
+
+enum InUseState {
+    INUSE_INUSE = 0,
+    INUSE_NOTINUSE = 1
+};
+
+/**
+ * Valve Type.
+ *
+ * This characteristic describes the type of valve.
+ */
+enum ValveType {
+    VALVETYPE_GENERIC = 0,
+    VALVETYPE_IRRIGRATION = 1,
+    VALVETYPE_SHOWERHEAD = 2,
+    VALVETYPE_WATERFAUCET = 3,
+};
+
+
+/**
+ * Active.
+ *
+ * This characteristic indicates whether the service is currently active.
+ */
+enum ActiveType {
+    ACTIVETYPE_INACTIVE = 0,
+    ACTIVETYPE_ACTION = 1
+};
+
+char *valve_current_state_string(uint8_t state);

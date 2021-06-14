@@ -25,29 +25,29 @@ menu "Homekit Configuration"
 
 endmenu
 
-menu "Garage Door GPIO Configuration"
-    config GPIO_OUTPUT_IO_RELAY
-        int "GPIO PIN for relay"
+menu "Sprinkler GPIO Configuration"
+    config GPIO_OUTPUT_IO_RELAY_ZONE1
+        int "GPIO PIN for relay on Zone1"
         default 26
         range 1 34
         help
-            GPIO number (IOxx) to control the door opener relay
+            GPIO number (IOxx) to control the zone 1 relay
             GPIOs 35-39 are input-only so cannot be used as outputs.
         
-    config GPIO_INPUT_IO_OPEN
-        int "GPIO PIN for open sensor"
+    config GPIO_OUTPUT_IO_RELAY_ZONE2
+        int "GPIO PIN for relay on zone2"
         default 27
         range 1 39
         help
-            GPIO number (IOxx) to connect to the garage open sensor (garage door fully open)
+            GPIO number (IOxx) to control the zone 2 relay
             Input is active low (pulled to ground when switch closed)
 
-    config GPIO_INPUT_IO_CLOSE
-        int "GPIO PIN for close sensor"
+    config GPIO_OUTPUT_IO_RELAY_MASTER
+        int "GPIO PIN for relay on master value"
         default 25
         range 1 39
         help
-            GPIO number (IOxx) to connect to the garage close sensor (garage door fully closed)
+            GPIO number (IOxx) to control the master relay
             Input is active low (pulled to ground when switch closed)
 
 

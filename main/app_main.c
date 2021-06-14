@@ -23,7 +23,7 @@
 #include "wifi.h"
 #include <app_hap_setup_payload.h>
 
-#include "garagedoor.h"
+#include "sprinkler.h"
 #include "homekit_states.h"
 
 /*  Required for server verification during OTA, PEM format as string  */
@@ -31,9 +31,9 @@ char server_cert[] = {};
 
 static const char *TAG = "HAP";
 
-static const uint16_t GARAGEDOOR_TASK_PRIORITY = 5;
-static const uint16_t GARAGEDOOR_TASK_STACKSIZE = 4 * 1024;
-static const char *GARAGEDOOR_TASK_NAME = "hap_garage";
+static const uint16_t SPRINKLER_TASK_PRIORITY = 5;
+static const uint16_t SPRINKLER_TASK_STACKSIZE = 4 * 1024;
+static const char *SPRINKLER_TASK_NAME = "hap_sprinkler";
 
 /* Reset network credentials if button is pressed for more than 3 seconds and then released */
 //static const uint16_t RESET_NETWORK_BUTTON_TIMEOUT = 3;
@@ -45,12 +45,9 @@ static const char *GARAGEDOOR_TASK_NAME = "hap_garage";
 //static const uint16_t RESET_GPIO = GPIO_NUM_0;
 
 /* Char definitions for our switches */
-static hap_char_t *open_contact_char = 0;
-static hap_char_t *close_contact_char = 0;
-static hap_char_t *motion_sensor_char = 0;
-static hap_char_t *door_switch_char = 0;
-static hap_char_t *closeif_door_switch_char = 0;
-static hap_char_t *garage_door_current_status_char = 0;
+static hap_char_t *zone1_valve_inuse_char = 0;
+static hap_char_t *zone2_valve_inuse_char = 0;
+static hap_char_t *master_valve_inuse_char = 0;
 static bool reset_requested = false;
 
 /**
@@ -84,16 +81,16 @@ static void reset_key_init(uint32_t key_gpio_pin)
  * Accessory Identity routine. Does nothing other than long the event because the device has no
  * LED to let the user know who we are.
  */
-static int garage_identify(hap_acc_t *ha)
+static int sprinkler_identify(hap_acc_t *ha)
 {
-    ESP_LOGI(TAG, "Garage Door Accessory identified");
+    ESP_LOGI(TAG, "Sprinkler Controller Accessory identified");
     return HAP_SUCCESS;
 }
 
 /**
  * Event handler to report what HAP is doing. Useful for debugging.
  */
-static void garage_hap_event_handler(void* arg, esp_event_base_t event_base, int event, void *data)
+static void sprinkler_hap_event_handler(void* arg, esp_event_base_t event_base, int event, void *data)
 {
     switch(event) {
         case HAP_EVENT_PAIRING_STARTED :
@@ -127,52 +124,42 @@ static void garage_hap_event_handler(void* arg, esp_event_base_t event_base, int
     }
 }
 
-/**
- * @brief Update the door status from our door switches
- */
-void door_status_update(int state)
-{
-        hap_val_t new_val;
-        new_val.i = state;
-        hap_char_update_val(garage_door_current_status_char, &new_val);
-}
-
 /* 
- * @brief Check the current status of the garage door and return it to homekit
+ * @brief Check the current status of the zone 1 valve and return it to homekit
  */
-static int garagedoor_read(hap_char_t *hc, hap_status_t *status_code, void *serv_priv, void *read_priv)
+static int zone1_valve_read(hap_char_t *hc, hap_status_t *status_code, void *serv_priv, void *read_priv)
 {
     if (hap_req_get_ctrl_id(read_priv)) {
-        ESP_LOGI(TAG, "garagedoor received read from %s", hap_req_get_ctrl_id(read_priv));
+        ESP_LOGI(TAG, "sprinkler received read from %s", hap_req_get_ctrl_id(read_priv));
     }
-    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_CURRENT_DOOR_STATE)) 
+    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_IN_USE)) 
     {
         hap_val_t new_val;
-        new_val.i = get_door_current_state();
+        new_val.i = get_valve_state(VALUE_ZONE1);
         hap_char_update_val(hc, &new_val);
         *status_code = HAP_STATUS_SUCCESS;
-        ESP_LOGI(TAG,"garagedoor status updated to %s", garagedoor_current_state_string(new_val.i));
+        ESP_LOGI(TAG,"sprinkler status updated to %s", valve_current_state_string(new_val.i));
     }
     return HAP_SUCCESS;
 }
 
 /**
- * @brief Open the garage door when homekit asks for it.
+ * @brief Activate the Zone1 valve when homekit asks for it.
  */
-static int garagedoor_write(hap_write_data_t write_data[], int count,
+static int zone1_valve_write(hap_write_data_t write_data[], int count,
         void *serv_priv, void *write_priv)
 {
     if (hap_req_get_ctrl_id(write_priv)) {
-        ESP_LOGI(TAG, "garagedoor received write from %s", hap_req_get_ctrl_id(write_priv));
+        ESP_LOGI(TAG, "sprinkler received write from %s", hap_req_get_ctrl_id(write_priv));
     }
-    ESP_LOGI(TAG, "garagedoor write called with %d chars", count);
+    ESP_LOGI(TAG, "sprinkler write called with %d chars", count);
     int i, ret = HAP_SUCCESS;
     hap_write_data_t *write;
     for (i = 0; i < count; i++) {
         write = &write_data[i];
-        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_TARGET_DOOR_STATE)) {
-            ESP_LOGI(TAG, "garagedoor received write TargetDoorState: %s", garagedoor_target_state_string(write->val.b));
-            set_door_target_state(write->val.b);
+        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_IN_USE)) {
+            ESP_LOGI(TAG, "sprinkler received write In Use: %s", valve_current_state_string(write->val.i));
+            set_valve_state(VALUE_ZONE1, write->val.i);
             hap_char_update_val(write->hc, &(write->val));
             *(write->status) = HAP_STATUS_SUCCESS;
         } else {
@@ -182,54 +169,42 @@ static int garagedoor_write(hap_write_data_t write_data[], int count,
     return ret;
 }
 
-/**
- * @brief Update our door and closeif switches status from the door switches
+/* 
+ * @brief Check the current status of the zone2 valve and return it to homekit
  */
-void door_switches_update(bool state)
-{
-        hap_val_t new_val;
-        new_val.b = state;
-        hap_char_update_val(door_switch_char, &new_val);
-        hap_char_update_val(closeif_door_switch_char, &new_val);
-}
-
-/**
- * @brief Reads the status of the garage door to select if the switch should be on or off. We set it to ON
- * if the door it open, and off if its anything else. Used for the door_switch_service and closeif_switch_service.
- */
-static int door_switch_read(hap_char_t *hc, hap_status_t *status_code, void *serv_priv, void *read_priv)
+static int zone2_valve_read(hap_char_t *hc, hap_status_t *status_code, void *serv_priv, void *read_priv)
 {
     if (hap_req_get_ctrl_id(read_priv)) {
-        ESP_LOGI(TAG, "closeif/door_switch received read from %s", hap_req_get_ctrl_id(read_priv));
+        ESP_LOGI(TAG, "sprinkler received read from %s", hap_req_get_ctrl_id(read_priv));
     }
-    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_ON)) 
+    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_IN_USE)) 
     {
         hap_val_t new_val;
-        // use open as on
-        new_val.b = (get_door_current_state()==CURRENT_STATE_OPEN);
+        new_val.i = get_valve_state(VALUE_ZONE1);
         hap_char_update_val(hc, &new_val);
         *status_code = HAP_STATUS_SUCCESS;
-        ESP_LOGI(TAG,"closeif/door_switch status updated to %s", (new_val.b)?"on(open)":"off(closed)");
+        ESP_LOGI(TAG,"sprinkler status updated to %s", valve_current_state_string(new_val.i));
     }
     return HAP_SUCCESS;
 }
 
 /**
- * @brief Takes a request from homekit and sets the switch status. We use on for open and off for closed
+ * @brief Activate the zone2 valve when homekit asks for it.
  */
-static int door_switch_write(hap_write_data_t write_data[], int count, void *serv_priv, void *write_priv)
+static int zone2_valve_write(hap_write_data_t write_data[], int count,
+        void *serv_priv, void *write_priv)
 {
     if (hap_req_get_ctrl_id(write_priv)) {
-        ESP_LOGI(TAG, "door switch received write from %s", hap_req_get_ctrl_id(write_priv));
+        ESP_LOGI(TAG, "sprinkler received write from %s", hap_req_get_ctrl_id(write_priv));
     }
-    ESP_LOGI(TAG, "door switch write called with %d chars", count);
+    ESP_LOGI(TAG, "sprinkler write called with %d chars", count);
     int i, ret = HAP_SUCCESS;
     hap_write_data_t *write;
     for (i = 0; i < count; i++) {
         write = &write_data[i];
-        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_ON)) {
-            ESP_LOGI(TAG, "door switch received write On State: %s", write->val.b?"on(open)":"off(closed)");
-            set_door_target_state(write->val.b?TARGET_STATE_OPEN:TARGET_STATE_CLOSED);
+        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_IN_USE)) {
+            ESP_LOGI(TAG, "sprinkler received write In Use: %s", valve_current_state_string(write->val.i));
+            set_valve_state(VALUE_ZONE1, write->val.i);
             hap_char_update_val(write->hc, &(write->val));
             *(write->status) = HAP_STATUS_SUCCESS;
         } else {
@@ -237,24 +212,45 @@ static int door_switch_write(hap_write_data_t write_data[], int count, void *ser
         }
     }
     return ret;
+}
+
+
+/* 
+ * @brief Check the current status of the Master Valve and return it to homekit
+ */
+static int master_valve_read(hap_char_t *hc, hap_status_t *status_code, void *serv_priv, void *read_priv)
+{
+    if (hap_req_get_ctrl_id(read_priv)) {
+        ESP_LOGI(TAG, "sprinkler received read from %s", hap_req_get_ctrl_id(read_priv));
+    }
+    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_IN_USE)) 
+    {
+        hap_val_t new_val;
+        new_val.i = get_valve_state(VALUE_ZONE1);
+        hap_char_update_val(hc, &new_val);
+        *status_code = HAP_STATUS_SUCCESS;
+        ESP_LOGI(TAG,"sprinkler status updated to %s", valve_current_state_string(new_val.i));
+    }
+    return HAP_SUCCESS;
 }
 
 /**
- * @brief Takes a request from homekit and sets the switch status. We use on for open and off for closed
+ * @brief Open the Master valve when homekit asks for it.
  */
-static int closeif_switch_write(hap_write_data_t write_data[], int count, void *serv_priv, void *write_priv)
+static int master_valve_write(hap_write_data_t write_data[], int count,
+        void *serv_priv, void *write_priv)
 {
     if (hap_req_get_ctrl_id(write_priv)) {
-        ESP_LOGI(TAG, "closeif received write from %s", hap_req_get_ctrl_id(write_priv));
+        ESP_LOGI(TAG, "sprinkler received write from %s", hap_req_get_ctrl_id(write_priv));
     }
-    ESP_LOGI(TAG, "closeif write called with %d chars", count);
+    ESP_LOGI(TAG, "sprinkler write called with %d chars", count);
     int i, ret = HAP_SUCCESS;
     hap_write_data_t *write;
     for (i = 0; i < count; i++) {
         write = &write_data[i];
-        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_ON)) {
-            ESP_LOGI(TAG, "closeif received write ON State: %s", write->val.b?"on(open)":"off(closed)");
-            force_door_target_state(write->val.b?TARGET_STATE_OPEN:TARGET_STATE_CLOSED);
+        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_IN_USE)) {
+            ESP_LOGI(TAG, "sprinkler received write In Use: %s", valve_current_state_string(write->val.i));
+            set_valve_state(VALUE_ZONE1, write->val.i);
             hap_char_update_val(write->hc, &(write->val));
             *(write->status) = HAP_STATUS_SUCCESS;
         } else {
@@ -264,95 +260,42 @@ static int closeif_switch_write(hap_write_data_t write_data[], int count, void *
     return ret;
 }
 
-void open_sensor_update(uint8_t state)
+
+void zone1_valve_update(uint8_t state)
 {
         hap_val_t new_val;
         new_val.i = state;
-        hap_char_update_val(open_contact_char, &new_val);
+        hap_char_update_val(zone1_valve_inuse_char, &new_val);
 }
 
-static int open_sensor_read(hap_char_t *hc, hap_status_t *status_code, void *serv_priv, void *read_priv)
-{
-    if (hap_req_get_ctrl_id(read_priv)) {
-        ESP_LOGI(TAG, "open sensor received read from %s", hap_req_get_ctrl_id(read_priv));
-    }
-    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_CONTACT_SENSOR_STATE)) 
-    {
-        hap_val_t new_val;
-        // use open as on
-        new_val.i = get_open_contact_status();
-        hap_char_update_val(hc, &new_val);
-        *status_code = HAP_STATUS_SUCCESS;
-        ESP_LOGI(TAG,"open sensor status updated to %s", contact_state_string(new_val.i));
-    }
-    return HAP_SUCCESS;
-}
-
-void close_sensor_update(uint8_t state)
+void zone2_valve_update(uint8_t state)
 {
         hap_val_t new_val;
         new_val.i = state;
-        hap_char_update_val(close_contact_char, &new_val);
+        hap_char_update_val(zone2_valve_inuse_char, &new_val);
 }
 
-static int close_sensor_read(hap_char_t *hc, hap_status_t *status_code, void *serv_priv, void *read_priv)
-{
-    if (hap_req_get_ctrl_id(read_priv)) {
-        ESP_LOGI(TAG, "close sensor received read from %s", hap_req_get_ctrl_id(read_priv));
-    }
-    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_CONTACT_SENSOR_STATE)) 
-    {
-        hap_val_t new_val;
-        // use open as on
-        new_val.i = get_close_contact_status();
-        hap_char_update_val(hc, &new_val);
-        *status_code = HAP_STATUS_SUCCESS;
-        ESP_LOGI(TAG,"close sensor status updated to %s", contact_state_string(new_val.i));
-    }
-    return HAP_SUCCESS;
-}
-
-void motion_sensor_update(bool state)
+void master_valve_update(uint8_t state)
 {
         hap_val_t new_val;
-        new_val.b = state;
-        hap_char_update_val(motion_sensor_char, &new_val);
-}
-
-static int motion_sensor_read(hap_char_t *hc, hap_status_t *status_code, void *serv_priv, void *read_priv)
-{
-    if (hap_req_get_ctrl_id(read_priv)) {
-        ESP_LOGI(TAG, "close sensor received read from %s", hap_req_get_ctrl_id(read_priv));
-    }
-    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_MOTION_DETECTED)) 
-    {
-        hap_val_t new_val;
-        // use open as on
-        new_val.b = get_motion_detected();
-        hap_char_update_val(hc, &new_val);
-        *status_code = HAP_STATUS_SUCCESS;
-        ESP_LOGI(TAG,"motion sensor status updated to %s", new_val.b?"inmotion":"nomotion");
-    }
-    return HAP_SUCCESS;
+        new_val.i = state;
+        hap_char_update_val(master_valve_inuse_char, &new_val);
 }
 
 /**
  * @brief Main Thread to handle setting up the service and accessories for the GarageDoor
  */
-static void garage_thread_entry(void *p)
+static void homekit_thread_entry(void *p)
 {
-    hap_acc_t *garageaccessory = NULL;
-    hap_serv_t *garagedoorservice = NULL;
-    hap_serv_t *closeif_switch_service = NULL;
-    hap_serv_t *door_switch_service = NULL;
-    hap_serv_t *opencontact_sensor_service = NULL;
-    hap_serv_t *closecontact_sensor_service = NULL;
-    hap_serv_t *motion_sensor_service = NULL;
+    hap_acc_t *sprinkleraccessory = NULL;
+    hap_serv_t *zone1valveservice = NULL;
+    hap_serv_t *zone2valveservice = NULL;
+    hap_serv_t *mastervalveservice = NULL;
 
     /*
-     * Configure the GPIO for the garage door state/relay control
+     * Configure the GPIO for the Sprinkler value relays
      */
-    garagedoor_setup();
+    sprinkler_setup();
 
     /* Configure HomeKit core to make the Accessory name (and thus the WAC SSID) unique,
      * instead of the default configuration wherein only the WAC SSID is made unique.
@@ -371,83 +314,58 @@ static void garage_thread_entry(void *p)
      * the mandatory services internally
      */
     hap_acc_cfg_t cfg = {
-        .name = "Esp-GarageDoor",
+        .name = "Esp-Sprinkler",
         .manufacturer = "Espressif",
-        .model = "EspGarageDoor01",
+        .model = "EspSprinkler01",
         .serial_num = "001122334455",
         .fw_rev = "0.9.0",
         .hw_rev =  (char*)esp_get_idf_version(),
         .pv = "1.1.0",
-        .identify_routine = garage_identify,
-        .cid = HAP_CID_GARAGE_DOOR_OPENER,
+        .identify_routine = sprinkler_identify,
+        .cid = HAP_CID_PROGRAMMABLE_SWITCH,
     };
-    ESP_LOGI(TAG, "Creating garage door accessory...");
+    ESP_LOGI(TAG, "Creating sprinkler accessory...");
     /* Create accessory object */
-    garageaccessory = hap_acc_create(&cfg);
+    sprinkleraccessory = hap_acc_create(&cfg);
 
     /* Add a dummy Product Data */
     uint8_t product_data[] = {'E','S','P','3','2','H','A','P'};
-    hap_acc_add_product_data(garageaccessory, product_data, sizeof(product_data));
+    hap_acc_add_product_data(sprinkleraccessory, product_data, sizeof(product_data));
 
-    uint8_t currentdoorstate = get_door_current_state();
-    
-    ESP_LOGI(TAG, "Creating garage door service (current state: %s)", garagedoor_current_state_string(currentdoorstate));
+    ESP_LOGI(TAG, "Creating valve zone 1 service");
 
-    /* Create the GarageDoor Service. Include the "name" since this is a user visible service  */
-    garagedoorservice = hap_serv_garage_door_opener_create(currentdoorstate, TARGET_STATE_CLOSED, false);
-    hap_serv_add_char(garagedoorservice, hap_char_name_create("ESP Garage Door"));
+    /* Create the Valve Service. Include the "name" since this is a user visible service  */
+    zone1valveservice = hap_serv_valve_create(ACTIVETYPE_ACTION, INUSE_NOTINUSE, VALVETYPE_IRRIGRATION);
+    hap_serv_add_char(zone1valveservice, hap_char_name_create("Zone 1 Irrigation Value"));
     /* Set the write callback for the service */
-    hap_serv_set_write_cb(garagedoorservice, garagedoor_write);
+    hap_serv_set_write_cb(zone1valveservice, zone1_valve_write);
     /* Set the read callback for the service (optional) */
-    hap_serv_set_read_cb(garagedoorservice, garagedoor_read);
+    hap_serv_set_read_cb(zone1valveservice, zone1_valve_read);
     /* Add the Garage Service to the Accessory Object */
-    hap_acc_add_serv(garageaccessory, garagedoorservice);
-    garage_door_current_status_char = hap_serv_get_char_by_uuid(garagedoorservice, HAP_CHAR_UUID_CURRENT_DOOR_STATE);
+    hap_acc_add_serv(sprinkleraccessory, zone1valveservice);
+    zone1_valve_inuse_char = hap_serv_get_char_by_uuid(zone1valveservice, HAP_CHAR_UUID_IN_USE);
 
-    ESP_LOGI(TAG, "Creating closeif service (current state: %s)", (currentdoorstate==CURRENT_STATE_OPEN)?"on(open)":"off(closed)");
-    // Create the CloseIf switch
-    closeif_switch_service = hap_serv_switch_create((bool)(currentdoorstate==CURRENT_STATE_OPEN));
-    hap_serv_add_char(closeif_switch_service, hap_char_name_create("ESP CloseIf Door"));
-    hap_serv_set_read_cb(closeif_switch_service, door_switch_read);
-    hap_serv_set_write_cb(closeif_switch_service, closeif_switch_write);
-    hap_acc_add_serv(garageaccessory, closeif_switch_service);
-    closeif_door_switch_char = hap_serv_get_char_by_uuid(closeif_switch_service, HAP_CHAR_UUID_ON);
+    /* Create the Valve Service. Include the "name" since this is a user visible service  */
+    zone2valveservice = hap_serv_valve_create(ACTIVETYPE_ACTION, INUSE_NOTINUSE, VALVETYPE_IRRIGRATION);
+    hap_serv_add_char(zone2valveservice, hap_char_name_create("Zone 2 Irrigation Value"));
+    /* Set the write callback for the service */
+    hap_serv_set_write_cb(zone2valveservice, zone2_valve_write);
+    /* Set the read callback for the service (optional) */
+    hap_serv_set_read_cb(zone2valveservice, zone2_valve_read);
+    /* Add the Garage Service to the Accessory Object */
+    hap_acc_add_serv(sprinkleraccessory, zone2valveservice);
+    zone2_valve_inuse_char = hap_serv_get_char_by_uuid(zone2valveservice, HAP_CHAR_UUID_IN_USE);
 
-    ESP_LOGI(TAG, "Creating door switch service (current state: %s)", (currentdoorstate==CURRENT_STATE_OPEN)?"on(open)":"off(closed)");
-    // Create the CloseIf switch
-    door_switch_service = hap_serv_switch_create((bool)(currentdoorstate==CURRENT_STATE_OPEN));
-    hap_serv_add_char(door_switch_service, hap_char_name_create("ESP Door Switch"));
-    hap_serv_set_read_cb(door_switch_service, door_switch_read);
-    hap_serv_set_write_cb(door_switch_service, door_switch_write);
-    hap_acc_add_serv(garageaccessory, door_switch_service);
-    door_switch_char = hap_serv_get_char_by_uuid(door_switch_service, HAP_CHAR_UUID_ON);
-
-    // Create the open contact sensor
-    uint8_t openstate = get_open_contact_status();
-    ESP_LOGI(TAG, "Creating open contact service (current state: %s)", contact_state_string(openstate));
-    opencontact_sensor_service = hap_serv_contact_sensor_create(openstate);
-    hap_serv_add_char(opencontact_sensor_service, hap_char_name_create("ESP Open Contact Sensor"));
-    hap_serv_set_read_cb(opencontact_sensor_service, open_sensor_read);
-    hap_acc_add_serv(garageaccessory, opencontact_sensor_service);
-    open_contact_char = hap_serv_get_char_by_uuid(opencontact_sensor_service, HAP_CHAR_UUID_CONTACT_SENSOR_STATE);
-
-    // Create the open contact sensor
-    uint8_t closestate = get_open_contact_status();
-    ESP_LOGI(TAG, "Creating close contact service (current state: %s)", contact_state_string(closestate));
-    closecontact_sensor_service = hap_serv_contact_sensor_create(get_close_contact_status());
-    hap_serv_add_char(closecontact_sensor_service, hap_char_name_create("ESP Close Contact Sensor"));
-    hap_serv_set_read_cb(closecontact_sensor_service, close_sensor_read);
-    hap_acc_add_serv(garageaccessory, closecontact_sensor_service);
-    close_contact_char = hap_serv_get_char_by_uuid(closecontact_sensor_service, HAP_CHAR_UUID_CONTACT_SENSOR_STATE);
-
-    bool inmotion = get_motion_detected();
-    ESP_LOGI(TAG, "Creating motion service (current state: %s)", inmotion?"inmotion":"nomotion");
-    motion_sensor_service = hap_serv_motion_sensor_create(inmotion);
-    hap_serv_add_char(motion_sensor_service, hap_char_name_create("ESP Garage Motion Sensor"));
-    hap_serv_set_read_cb(motion_sensor_service, motion_sensor_read);
-    hap_acc_add_serv(garageaccessory, motion_sensor_service);
-    motion_sensor_char = hap_serv_get_char_by_uuid(motion_sensor_service, HAP_CHAR_UUID_MOTION_DETECTED);
-
+    /* Create the Valve Service. Include the "name" since this is a user visible service  */
+    mastervalveservice = hap_serv_valve_create(ACTIVETYPE_ACTION, INUSE_NOTINUSE, VALVETYPE_IRRIGRATION);
+    hap_serv_add_char(mastervalveservice, hap_char_name_create("Master Irrigation Value"));
+    /* Set the write callback for the service */
+    hap_serv_set_write_cb(mastervalveservice, master_valve_write);
+    /* Set the read callback for the service (optional) */
+    hap_serv_set_read_cb(mastervalveservice, master_valve_read);
+    /* Add the Garage Service to the Accessory Object */
+    hap_acc_add_serv(sprinkleraccessory, mastervalveservice);
+    master_valve_inuse_char = hap_serv_get_char_by_uuid(mastervalveservice, HAP_CHAR_UUID_IN_USE);
 
 #if 0
     /* Create the Firmware Upgrade HomeKit Custom Service.
@@ -463,16 +381,11 @@ static void garage_thread_entry(void *p)
 #endif
 
     /* Add the Accessory to the HomeKit Database */
-    ESP_LOGI(TAG, "Adding Garage Door Accessory...");
-    hap_add_accessory(garageaccessory);
-
-    /* Register a common button for reset Wi-Fi network and reset to factory.
-     */
-//    ESP_LOGI(TAG, "Register reset GPIO (reset button) on pin %d", RESET_GPIO);
-//    reset_key_init(RESET_GPIO);
+    ESP_LOGI(TAG, "Adding Irrigation Accessory...");
+    hap_add_accessory(sprinkleraccessory);
 
     /* Register an event handler for HomeKit specific events */
-    esp_event_handler_register(HAP_EVENT, ESP_EVENT_ANY_ID, &garage_hap_event_handler, NULL);
+    esp_event_handler_register(HAP_EVENT, ESP_EVENT_ANY_ID, &sprinkler_hap_event_handler, NULL);
 
     /* Query the controller count (just for information) */
     ESP_LOGI(TAG, "Accessory is paired with %d controllers", hap_get_paired_controller_count());
@@ -489,7 +402,7 @@ static void garage_thread_entry(void *p)
      * However, for testing purpose, this can be overridden by using hap_set_setup_code()
      * and hap_set_setup_id() APIs, as has been done here.
      * 
-     * That said, this garage door controller is meant for home use, and not for production,
+     * That said, this homekit controller is meant for home use, and not for production,
      * so it it OK to hard code the device info.
      */
 #ifdef CONFIG_HOMEKIT_USE_HARDCODED_SETUP_CODE
@@ -511,8 +424,6 @@ static void garage_thread_entry(void *p)
     /* Initialize Wi-Fi */
     wifi_setup();
     wifi_connect();
-
-    start_garagedoor();
 
     wifi_waitforconnect();
 
@@ -540,5 +451,5 @@ void app_main()
 
     ESP_LOGI(TAG, "[APP] Creating main thread...");
 
-    xTaskCreate(garage_thread_entry, GARAGEDOOR_TASK_NAME, GARAGEDOOR_TASK_STACKSIZE, NULL, GARAGEDOOR_TASK_PRIORITY, NULL);
+    xTaskCreate(homekit_thread_entry, SPRINKLER_TASK_NAME, SPRINKLER_TASK_STACKSIZE, NULL, SPRINKLER_TASK_PRIORITY, NULL);
 }
