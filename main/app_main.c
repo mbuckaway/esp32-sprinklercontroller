@@ -122,6 +122,27 @@ static void sprinkler_hap_event_handler(void* arg, esp_event_base_t event_base, 
     }
 }
 
+void zone1_valve_update(uint8_t state)
+{
+        hap_val_t new_val;
+        new_val.i = state;
+        hap_char_update_val(zone1_valve_inuse_char, &new_val);
+}
+
+void zone2_valve_update(uint8_t state)
+{
+        hap_val_t new_val;
+        new_val.i = state;
+        hap_char_update_val(zone2_valve_inuse_char, &new_val);
+}
+
+void master_valve_update(uint8_t state)
+{
+        hap_val_t new_val;
+        new_val.i = state;
+        hap_char_update_val(master_valve_inuse_char, &new_val);
+}
+
 /* 
  * @brief Check the current status of the zone 1 valve and return it to homekit
  */
@@ -135,8 +156,9 @@ static int zone1_valve_read(hap_char_t *hc, hap_status_t *status_code, void *ser
         hap_val_t new_val;
         new_val.i = get_valve_state(VALUE_ZONE1);
         hap_char_update_val(hc, &new_val);
+        zone1_valve_update(new_val.i);
         *status_code = HAP_STATUS_SUCCESS;
-        ESP_LOGI(TAG,"sprinkler status updated to %s", valve_current_state_string(new_val.i));
+        ESP_LOGI(TAG,"sprinkler status read as %s", valve_current_state_string(new_val.i));
     }
     return HAP_SUCCESS;
 }
@@ -155,10 +177,11 @@ static int zone1_valve_write(hap_write_data_t write_data[], int count,
     hap_write_data_t *write;
     for (i = 0; i < count; i++) {
         write = &write_data[i];
-        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_IN_USE)) {
+        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_ACTIVE)) {
             ESP_LOGI(TAG, "sprinkler received write In Use: %s", valve_current_state_string(write->val.i));
             set_valve_state(VALUE_ZONE1, write->val.i);
             hap_char_update_val(write->hc, &(write->val));
+            zone1_valve_update(write->val.i);
             *(write->status) = HAP_STATUS_SUCCESS;
         } else {
             *(write->status) = HAP_STATUS_RES_ABSENT;
@@ -175,13 +198,14 @@ static int zone2_valve_read(hap_char_t *hc, hap_status_t *status_code, void *ser
     if (hap_req_get_ctrl_id(read_priv)) {
         ESP_LOGI(TAG, "sprinkler received read from %s", hap_req_get_ctrl_id(read_priv));
     }
-    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_IN_USE)) 
+    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_ACTIVE)) 
     {
         hap_val_t new_val;
-        new_val.i = get_valve_state(VALUE_ZONE1);
+        new_val.i = get_valve_state(VALUE_ZONE2);
         hap_char_update_val(hc, &new_val);
+        zone2_valve_update(new_val.i);
         *status_code = HAP_STATUS_SUCCESS;
-        ESP_LOGI(TAG,"sprinkler status updated to %s", valve_current_state_string(new_val.i));
+        ESP_LOGI(TAG,"sprinkler status read as %s", valve_current_state_string(new_val.i));
     }
     return HAP_SUCCESS;
 }
@@ -200,10 +224,11 @@ static int zone2_valve_write(hap_write_data_t write_data[], int count,
     hap_write_data_t *write;
     for (i = 0; i < count; i++) {
         write = &write_data[i];
-        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_IN_USE)) {
+        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_ACTIVE)) {
             ESP_LOGI(TAG, "sprinkler received write In Use: %s", valve_current_state_string(write->val.i));
-            set_valve_state(VALUE_ZONE1, write->val.i);
+            set_valve_state(VALUE_ZONE2, write->val.i);
             hap_char_update_val(write->hc, &(write->val));
+            zone2_valve_update(write->val.i);
             *(write->status) = HAP_STATUS_SUCCESS;
         } else {
             *(write->status) = HAP_STATUS_RES_ABSENT;
@@ -221,13 +246,14 @@ static int master_valve_read(hap_char_t *hc, hap_status_t *status_code, void *se
     if (hap_req_get_ctrl_id(read_priv)) {
         ESP_LOGI(TAG, "sprinkler received read from %s", hap_req_get_ctrl_id(read_priv));
     }
-    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_IN_USE)) 
+    if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_ACTIVE)) 
     {
         hap_val_t new_val;
-        new_val.i = get_valve_state(VALUE_ZONE1);
+        new_val.i = get_valve_state(VALUE_MASTER);
         hap_char_update_val(hc, &new_val);
+        master_valve_update(new_val.i);
         *status_code = HAP_STATUS_SUCCESS;
-        ESP_LOGI(TAG,"sprinkler status updated to %s", valve_current_state_string(new_val.i));
+        ESP_LOGI(TAG,"sprinkler status read as %s", valve_current_state_string(new_val.i));
     }
     return HAP_SUCCESS;
 }
@@ -246,10 +272,11 @@ static int master_valve_write(hap_write_data_t write_data[], int count,
     hap_write_data_t *write;
     for (i = 0; i < count; i++) {
         write = &write_data[i];
-        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_IN_USE)) {
+        if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_ACTIVE)) {
             ESP_LOGI(TAG, "sprinkler received write In Use: %s", valve_current_state_string(write->val.i));
-            set_valve_state(VALUE_ZONE1, write->val.i);
+            set_valve_state(VALUE_MASTER, write->val.i);
             hap_char_update_val(write->hc, &(write->val));
+            master_valve_update(write->val.i);
             *(write->status) = HAP_STATUS_SUCCESS;
         } else {
             *(write->status) = HAP_STATUS_RES_ABSENT;
@@ -294,6 +321,10 @@ static void homekit_thread_entry(void *p)
     /* Initialise the mandatory parameters for Accessory which will be added as
      * the mandatory services internally
      */
+
+// Missing from the ESP32 SDK
+#define HAP_CID_SPRINKLERS 28
+
     hap_acc_cfg_t cfg = {
         .name = "Esp-Sprinkler",
         .manufacturer = "Espressif",
@@ -303,7 +334,7 @@ static void homekit_thread_entry(void *p)
         .hw_rev =  (char*)esp_get_idf_version(),
         .pv = "1.1.0",
         .identify_routine = sprinkler_identify,
-        .cid = HAP_CID_PROGRAMMABLE_SWITCH,
+        .cid = HAP_CID_SPRINKLERS,
     };
     ESP_LOGI(TAG, "Creating sprinkler accessory...");
     /* Create accessory object */
@@ -316,7 +347,7 @@ static void homekit_thread_entry(void *p)
     ESP_LOGI(TAG, "Creating valve zone 1 service");
 
     /* Create the Valve Service. Include the "name" since this is a user visible service  */
-    zone1valveservice = hap_serv_valve_create(ACTIVETYPE_ACTION, INUSE_NOTINUSE, VALVETYPE_IRRIGRATION);
+    zone1valveservice = hap_serv_valve_create(ACTIVETYPE_INACTIVE, INUSE_INUSE, VALVETYPE_IRRIGRATION);
     hap_serv_add_char(zone1valveservice, hap_char_name_create("Zone 1 Irrigation Value"));
     /* Set the write callback for the service */
     hap_serv_set_write_cb(zone1valveservice, zone1_valve_write);
@@ -327,7 +358,7 @@ static void homekit_thread_entry(void *p)
     zone1_valve_inuse_char = hap_serv_get_char_by_uuid(zone1valveservice, HAP_CHAR_UUID_IN_USE);
 
     /* Create the Valve Service. Include the "name" since this is a user visible service  */
-    zone2valveservice = hap_serv_valve_create(ACTIVETYPE_ACTION, INUSE_NOTINUSE, VALVETYPE_IRRIGRATION);
+    zone2valveservice = hap_serv_valve_create(ACTIVETYPE_INACTIVE, INUSE_INUSE, VALVETYPE_IRRIGRATION);
     hap_serv_add_char(zone2valveservice, hap_char_name_create("Zone 2 Irrigation Value"));
     /* Set the write callback for the service */
     hap_serv_set_write_cb(zone2valveservice, zone2_valve_write);
@@ -338,7 +369,7 @@ static void homekit_thread_entry(void *p)
     zone2_valve_inuse_char = hap_serv_get_char_by_uuid(zone2valveservice, HAP_CHAR_UUID_IN_USE);
 
     /* Create the Valve Service. Include the "name" since this is a user visible service  */
-    mastervalveservice = hap_serv_valve_create(ACTIVETYPE_ACTION, INUSE_NOTINUSE, VALVETYPE_IRRIGRATION);
+    mastervalveservice = hap_serv_valve_create(ACTIVETYPE_INACTIVE, INUSE_INUSE, VALVETYPE_IRRIGRATION);
     hap_serv_add_char(mastervalveservice, hap_char_name_create("Master Irrigation Value"));
     /* Set the write callback for the service */
     hap_serv_set_write_cb(mastervalveservice, master_valve_write);
