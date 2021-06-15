@@ -18,7 +18,7 @@
 #include <hap_apple_chars.h>
 
 //#include <hap_fw_upgrade.h>
-//#include <iot_button.h>
+#include <iot_button.h>
 
 #include "wifi.h"
 #include <app_hap_setup_payload.h>
@@ -39,10 +39,10 @@ static const char *SPRINKLER_TASK_NAME = "hap_sprinkler";
 //static const uint16_t RESET_NETWORK_BUTTON_TIMEOUT = 3;
 
 /* Reset to factory if button is pressed and held for more than 10 seconds */
-// static const uint16_t RESET_TO_FACTORY_BUTTON_TIMEOUT = 10;
+static const uint16_t RESET_TO_FACTORY_BUTTON_TIMEOUT = 10;
 
 /* The button "Boot" will be used as the Reset button for the example */
-//static const uint16_t RESET_GPIO = GPIO_NUM_0;
+static const uint16_t RESET_GPIO = GPIO_NUM_0;
 
 /* Char definitions for our switches */
 static hap_char_t *zone1_valve_inuse_char = 0;
@@ -66,16 +66,14 @@ void reset_to_factory_handler(void)
 /**
  * The Reset button  GPIO initialisation function.
  * Same button will be used for resetting Wi-Fi network as well as for reset to factory based on
- * the time for which the button is pressed.
+ * the time for which the button is pressed. Reset WIFI is not used for hard coded WIFI setup.
  */
-#if 0
 static void reset_key_init(uint32_t key_gpio_pin)
 {
     button_handle_t handle = iot_button_create(key_gpio_pin, BUTTON_ACTIVE_LOW);
-    iot_button_add_on_release_cb(handle, RESET_NETWORK_BUTTON_TIMEOUT, reset_network_handler, NULL);
-    iot_button_add_on_press_cb(handle, RESET_TO_FACTORY_BUTTON_TIMEOUT, reset_to_factory_handler, NULL);
+//    iot_button_add_on_release_cb(handle, RESET_NETWORK_BUTTON_TIMEOUT, reset_network_handler, NULL);
+    iot_button_add_on_press_cb(handle, RESET_TO_FACTORY_BUTTON_TIMEOUT, (button_cb)reset_to_factory_handler, NULL);
 }
-#endif
 
 /**
  * Accessory Identity routine. Does nothing other than long the event because the device has no
@@ -260,28 +258,6 @@ static int master_valve_write(hap_write_data_t write_data[], int count,
     return ret;
 }
 
-
-void zone1_valve_update(uint8_t state)
-{
-        hap_val_t new_val;
-        new_val.i = state;
-        hap_char_update_val(zone1_valve_inuse_char, &new_val);
-}
-
-void zone2_valve_update(uint8_t state)
-{
-        hap_val_t new_val;
-        new_val.i = state;
-        hap_char_update_val(zone2_valve_inuse_char, &new_val);
-}
-
-void master_valve_update(uint8_t state)
-{
-        hap_val_t new_val;
-        new_val.i = state;
-        hap_char_update_val(master_valve_inuse_char, &new_val);
-}
-
 /**
  * @brief Main Thread to handle setting up the service and accessories for the GarageDoor
  */
@@ -296,6 +272,11 @@ static void homekit_thread_entry(void *p)
      * Configure the GPIO for the Sprinkler value relays
      */
     sprinkler_setup();
+
+    /*
+     * Setup the reset button to reset homekit to defaults
+     */
+    reset_key_init(RESET_GPIO);
 
     /* Configure HomeKit core to make the Accessory name (and thus the WAC SSID) unique,
      * instead of the default configuration wherein only the WAC SSID is made unique.
