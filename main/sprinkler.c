@@ -15,7 +15,7 @@
 
 static const char *TAG = "GDGPIO";
 
-static const long long unsigned int GPIO_OUTPUT_PIN_SEL = (1ULL<<CONFIG_GPIO_OUTPUT_IO_RELAY_ZONE1) | (1ULL<<CONFIG_GPIO_OUTPUT_IO_RELAY_ZONE2) | (1ULL<<CONFIG_GPIO_OUTPUT_IO_RELAY_MASTER);
+static const long long unsigned int GPIO_OUTPUT_PIN_SEL = ((1ULL<<CONFIG_GPIO_OUTPUT_IO_RELAY_ZONE1) | (1ULL<<CONFIG_GPIO_OUTPUT_IO_RELAY_ZONE2) | (1ULL<<CONFIG_GPIO_OUTPUT_IO_RELAY_MASTER));
 //static const long long unsigned int GPIO_INPUT_PIN_SEL = ((1ULL<<CONFIG_GPIO_INPUT_IO_OPEN) | (1ULL<<CONFIG_GPIO_INPUT_IO_CLOSE));
 //static const uint16_t ESP_INTR_FLAG_DEFAULT = 0;
 
@@ -25,7 +25,7 @@ static const long long unsigned int GPIO_OUTPUT_PIN_SEL = (1ULL<<CONFIG_GPIO_OUT
  * @param valveno Valve number (ValveNo type)
  * @param inuse Valve in use (in use = active and flowing)
  */
-void set_valve_state(u_int8_t valveno, u_int8_t inuse)
+void set_valve_state(u_int8_t valveno, u_int8_t active)
 {
     ESP_LOGI(TAG, "Enabling relay %d...", valveno);
     // Check that the GPIO pin is a digital and not ADC!
@@ -45,7 +45,7 @@ void set_valve_state(u_int8_t valveno, u_int8_t inuse)
             gpio_port = CONFIG_GPIO_OUTPUT_IO_RELAY_ZONE1;
             break;
     }
-    gpio_set_level(gpio_port, inuse);
+    gpio_set_level(gpio_port, active);
 }
 
 /**
@@ -74,7 +74,7 @@ u_int8_t get_valve_state(u_int8_t valveno)
             gpio_port = CONFIG_GPIO_OUTPUT_IO_RELAY_ZONE1;
             break;
     }
-    return gpio_get_level(gpio_port)?INUSE_NOTINUSE:INUSE_INUSE;
+    return gpio_get_level(gpio_port)?ACTIVETYPE_ACTIVE:ACTIVETYPE_INACTIVE;
 }
 
 

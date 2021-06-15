@@ -49,8 +49,8 @@ enum ContactState {
  */
 
 enum InUseState {
-    INUSE_INUSE = 0,
-    INUSE_NOTINUSE = 1
+    INUSE_NOTINUSE = 0,
+    INUSE_INUSE = 1
 };
 
 /**
@@ -73,7 +73,7 @@ enum ValveType {
  */
 enum ActiveType {
     ACTIVETYPE_INACTIVE = 0,
-    ACTIVETYPE_ACTION = 1
+    ACTIVETYPE_ACTIVE = 1
 };
 
 char *valve_current_state_string(uint8_t state);

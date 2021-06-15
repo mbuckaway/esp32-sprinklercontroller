@@ -5,8 +5,8 @@
 #include "homekit_states.h"
 
 static char *valve_current_states[] = {
-    "in use",
-    "not in use"
+    "not active",
+    "active"
 };
 
 /**
@@ -19,9 +19,9 @@ static char *valve_current_states[] = {
 
 char *valve_current_state_string(uint8_t state)
 {
-    if (state>INUSE_NOTINUSE)
+    if (state>ACTIVETYPE_ACTIVE)
     {
-        state = INUSE_NOTINUSE;
+        state = ACTIVETYPE_ACTIVE;
     }
     return (valve_current_states[state]);
 }
