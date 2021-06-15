@@ -57,6 +57,10 @@ Open the Home app on your iPhone/iPad and follow these steps
 
 If Homekit things there is another accessory of the same code, it will cause a timeout issue adding this accessory. This somes happens when adding and deleting the accessory during testing. Make sure to check the monitor when the device boots up for the number of registered accessories. It should be zero. If you reset the device, you have to remove the device from the Home app. Generally speaking it is better to remove the device from the home app first, and them reset the device (which wipes it's homekit configuration).
 
+### Using the Sprinkler Accessory
+
+When you add this accessory to Homekit, it will appear as a Sprinkler. However, Homekit makes some assumptions about a sprinkler controller. It assumes the it has a timer and a scheduler built it, so control from Homekit it limited to turning the associated values on/off or enabling/disabling them manually. It also sets two statuses per value: active and inuse. These two status device what status is reported to Homekit. You will notice when you activate a value, it goes from off, to waiting, to running. Turning off the valve it runs through stopping, waiting, off. For this controller, this makes no sense as we are setting up automatations in Homekit to setup the schedule for the sprinkler. To further add to the confusion, the Home app does not allow Sprinkler values to be added to scenes or automations. I could, change the type to a switch in my code, but I found that the Eve app is more intelligent. It allows for Scenes and Automations for sprinkler values. I suggest switching from the Home app to the Eve app. Testing for rain can be done with the Shortcuts app testing for rain via the weather forecast (more info to come).
+
 ## Additional Information
 
 The ESP32 Homekit SDK has most features than are used here. Please refer to their documentation for details.
