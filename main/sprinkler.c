@@ -56,7 +56,7 @@ void set_valve_state(u_int8_t valveno, u_int8_t active)
  */
 u_int8_t get_valve_state(u_int8_t valveno)
 {
-    ESP_LOGI(TAG, "Enabling relay %d...", valveno);
+    ESP_LOGI(TAG, "Reading relay %d...", valveno);
     // Check that the GPIO pin is a digital and not ADC!
     int gpio_port = CONFIG_GPIO_OUTPUT_IO_RELAY_ZONE1;
     switch (valveno)

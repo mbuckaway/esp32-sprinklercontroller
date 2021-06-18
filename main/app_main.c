@@ -25,6 +25,7 @@
 
 #include "sprinkler.h"
 #include "homekit_states.h"
+#include "led.h"
 
 /*  Required for server verification during OTA, PEM format as string  */
 char server_cert[] = {};
@@ -153,12 +154,14 @@ static int zone1_valve_read(hap_char_t *hc, hap_status_t *status_code, void *ser
     }
     if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_IN_USE)) 
     {
+        led2_on();
         hap_val_t new_val;
         new_val.i = get_valve_state(VALUE_ZONE1);
         hap_char_update_val(hc, &new_val);
         zone1_valve_update(new_val.i);
         *status_code = HAP_STATUS_SUCCESS;
         ESP_LOGI(TAG,"sprinkler status read as %s", valve_current_state_string(new_val.i));
+        led_off();
     }
     return HAP_SUCCESS;
 }
@@ -174,6 +177,7 @@ static int zone1_valve_write(hap_write_data_t write_data[], int count,
     }
     ESP_LOGI(TAG, "sprinkler write called with %d chars", count);
     int i, ret = HAP_SUCCESS;
+    led1_on();
     hap_write_data_t *write;
     for (i = 0; i < count; i++) {
         write = &write_data[i];
@@ -187,6 +191,7 @@ static int zone1_valve_write(hap_write_data_t write_data[], int count,
             *(write->status) = HAP_STATUS_RES_ABSENT;
         }
     }
+    led_off();
     return ret;
 }
 
@@ -200,12 +205,14 @@ static int zone2_valve_read(hap_char_t *hc, hap_status_t *status_code, void *ser
     }
     if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_ACTIVE)) 
     {
+        led2_on();
         hap_val_t new_val;
         new_val.i = get_valve_state(VALUE_ZONE2);
         hap_char_update_val(hc, &new_val);
         zone2_valve_update(new_val.i);
         *status_code = HAP_STATUS_SUCCESS;
         ESP_LOGI(TAG,"sprinkler status read as %s", valve_current_state_string(new_val.i));
+        led_off();
     }
     return HAP_SUCCESS;
 }
@@ -222,6 +229,7 @@ static int zone2_valve_write(hap_write_data_t write_data[], int count,
     ESP_LOGI(TAG, "sprinkler write called with %d chars", count);
     int i, ret = HAP_SUCCESS;
     hap_write_data_t *write;
+    led1_on();
     for (i = 0; i < count; i++) {
         write = &write_data[i];
         if (!strcmp(hap_char_get_type_uuid(write->hc), HAP_CHAR_UUID_ACTIVE)) {
@@ -234,6 +242,7 @@ static int zone2_valve_write(hap_write_data_t write_data[], int count,
             *(write->status) = HAP_STATUS_RES_ABSENT;
         }
     }
+    led_off();
     return ret;
 }
 
@@ -248,12 +257,14 @@ static int master_valve_read(hap_char_t *hc, hap_status_t *status_code, void *se
     }
     if (!strcmp(hap_char_get_type_uuid(hc), HAP_CHAR_UUID_ACTIVE)) 
     {
+        led2_on();
         hap_val_t new_val;
         new_val.i = get_valve_state(VALUE_MASTER);
         hap_char_update_val(hc, &new_val);
         master_valve_update(new_val.i);
         *status_code = HAP_STATUS_SUCCESS;
         ESP_LOGI(TAG,"sprinkler status read as %s", valve_current_state_string(new_val.i));
+        led_off();
     }
     return HAP_SUCCESS;
 }
@@ -268,6 +279,7 @@ static int master_valve_write(hap_write_data_t write_data[], int count,
         ESP_LOGI(TAG, "sprinkler received write from %s", hap_req_get_ctrl_id(write_priv));
     }
     ESP_LOGI(TAG, "sprinkler write called with %d chars", count);
+    led1_on();
     int i, ret = HAP_SUCCESS;
     hap_write_data_t *write;
     for (i = 0; i < count; i++) {
@@ -282,6 +294,7 @@ static int master_valve_write(hap_write_data_t write_data[], int count,
             *(write->status) = HAP_STATUS_RES_ABSENT;
         }
     }
+    led_off();
     return ret;
 }
 
@@ -438,12 +451,14 @@ static void homekit_thread_entry(void *p)
     wifi_connect();
 
     wifi_waitforconnect();
+    led1_on();
 
     /* After all the initializations are done, start the HAP core */
     ESP_LOGI(TAG, "Starting HAP...");
     hap_start();
     
     ESP_LOGI(TAG, "HAP initialization complete.");
+    led_off();
 
     /* The task ends here. The read/write callbacks will be invoked by the HAP Framework */
     vTaskDelete(NULL);
@@ -462,6 +477,8 @@ void app_main()
     esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
 
     ESP_LOGI(TAG, "[APP] Creating main thread...");
+    configure_led();
+    led_both();
 
     xTaskCreate(homekit_thread_entry, SPRINKLER_TASK_NAME, SPRINKLER_TASK_STACKSIZE, NULL, SPRINKLER_TASK_PRIORITY, NULL);
 }

@@ -50,5 +50,18 @@ menu "Sprinkler GPIO Configuration"
             GPIO number (IOxx) to control the master relay
             Input is active low (pulled to ground when switch closed)
 
+    config LED1_GPIO
+        int "Status LED 1 GPIO"
+        range 3 35
+        default 12
+        help
+            GPIO for status LED 1
+
+    config LED2_GPIO
+        int "Status LED 2 GPIO"
+        range 3 35
+        default 14
+        help
+            GPIO for status LED 2
 
 endmenu
